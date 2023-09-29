@@ -2,7 +2,9 @@ import configparser
 import logging
 import logging.config
 from logging.handlers import RotatingFileHandler
+import os
 from pathlib import Path
+import traceback
 
 import feedparser
 
@@ -11,6 +13,9 @@ DEFAULT_CONFIG_FILE = Path('~/.config/fgscripts/acsconfig.ini').expanduser()
 DEFAULT_FEED = "https://sundaystrippedp.podbean.com/rss"
 DEFAULT_DOWNLOAD = Path("/tmp")
 DEFAULT_DESTINATION = Path("/tmp")
+
+DEFAULT_ARTIST = "Show Name"
+DEFAULT_TITLE_PATTERN = "Segment {:1}"
 
 DEFAULT_DURATION = 15
 DEFAULT_THRESHOLD = -60
@@ -87,28 +92,48 @@ def init_logging(log_dir=Path(DEFAULT_LOG_DIR).expanduser(), email_config=None):
         logger.addHandler(file_handler)
 
     if email_config is not None:
+        if email_config['password'] == "OS_ENVIRON":
+            password = os.environ.get('EMAILPASS')
+        else:
+            password = email_config['password']
+
+        if email_config['port'] is not None:
+            port = email_config['port']
+        else:
+            port = "25"
+
+        if email_config['secure'] is not None:
+            secure = email_config['secure']
+        else:
+            secure = ()
+
         try:
+            print('try')
             mail_handler = logging.handlers.SMTPHandler(
-                mailhost = email_config['mailhost'],
+                mailhost = (email_config['mailhost'], port),
                 fromaddr = email_config['from_name'],
                 toaddrs = email_config['recipients'],
                 subject = email_config['subject'],
-                credentials = (email_config['username'], email_config['password']),
-                secure = email_config['secure'],
+                credentials = (email_config['username'], password),
+                secure = secure,
             )
             brief_format = LOGGING_CONFIG['formatters']['brief']
             mail_format = logging.Formatter(brief_format['format'], datefmt = brief_format['datefmt'])
-            mail_hander.setFormatter(mail_format)
-            mail_handler.setLevel(logging.INFO)
+            mail_handler.setFormatter(mail_format)
+            mail_handler.setLevel(logging.WARN)
             logger.addHandler(mail_handler)
         except Exception as e:
-            print(e)
+            error = traceback.format_exc()
+            logger.critical(error)
 
 class Config:
     def __init__(self):
         self.feed = ""
         self.download = ""
         self.destination = ""
+
+        self.artist = ""
+        self.title_pattern = ""
 
         self.duration = 0
         self.threshold = 0
@@ -133,6 +158,9 @@ class Config:
             self.download = Path(config['directories']['download'])
             self.destination = Path(config['directories']['destination'])
 
+            self.artist = config['metadata']['artist']
+            self.title_pattern = config['metadata']['title_pattern']
+
             self.duration = float(config['silence']['duration'])
             self.threshold = int(config['silence']['threshold'])
             self.output_pattern = str(Path(self.download, config['silence']['output_pattern']))
@@ -145,7 +173,10 @@ class Config:
 
             self.feed = DEFAULT_FEED
             self.download = DEFAULT_DOWNLOAD
-            self.desitination = DEFAULT_DESTINATION
+            self.destination = DEFAULT_DESTINATION
+
+            self.artist = DEFAULT_ARTIST
+            self.title_pattern = DEFAULT_TITLE_PATTERN
 
             self.duration = DEFAULT_DURATION
             self.threshold = DEFAULT_THRESHOLD
@@ -181,4 +212,7 @@ class Config:
         self.logger.debug(f'Using threshold: {self.threshold}db')
         self.logger.debug(f'Output pattern: {self.output_pattern}')
         self.logger.debug(f'Test output: {self.output_pattern.format(1)}')
+        self.logger.debug(f'Artist: {self.artist}')
+        self.logger.debug(f'Title pattern: {self.title_pattern}')
+        self.logger.debug(f'Test title: {self.title_pattern.format(1)}')
 

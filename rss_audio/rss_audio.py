@@ -3,9 +3,10 @@ import logging
 
 import create_ini
 import helptext
+from move_audio import move_audio
+import rss_runner
 import settings
 from settings import Config
-import rss_runner
 from split_audio import split_audio
 
 def Main():
@@ -21,6 +22,11 @@ def Main():
 
     normal_run.add_argument('-v', '--verbose', help='verbose output', action='store_true')
     normal_run.add_argument('-e', '--email', help='email log output', action='store_true')
+
+    validate_config = subparsers.add_parser("validate")
+    validate_config.add_argument('-c', '--config', help='config file to validate')
+    validate_config.add_argument('-e', '--email', help='email validation', action='store_true')
+    validate_config.add_argument('-v', '--verbose', help='verbose output', action='store_true')
 
     args = parser.parse_args()
 
@@ -41,16 +47,20 @@ def Main():
 
             logger = settings.get_fgLogger()
 
+        if args.subparser == "run":
             if args.verbose:
                 logger.setLevel(logging.DEBUG)
 
-            if args.email:
-                print('email')
-
             mp3_link = rss_runner.get_newest_entry(config.feed)
             local_filename = rss_runner.download_audio(mp3_link, config.download)
-            split_audio(local_filename, config.output_pattern, config.threshold, config.duration, verbose=args.verbose)
+            final_cuts = split_audio(local_filename, config.output_pattern, config.artist, config.title_pattern, config.threshold, config.duration, verbose=args.verbose)
+            move_audio(final_cuts, config.destination)
+            logging.shutdown()
 
+        if args.subparser == "validate":
+            logger.setLevel(logging.DEBUG)
+            logger.info(logger.handlers)
+            logging.shutdown()
 
 if __name__ == '__main__':
     Main()

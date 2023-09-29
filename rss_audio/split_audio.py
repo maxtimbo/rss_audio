@@ -1,7 +1,11 @@
+import datetime
 import ffmpeg
+import os
 import re
 import subprocess
 import sys
+
+import taglib
 
 import settings
 
@@ -70,9 +74,23 @@ def get_chunks(in_file, silence_threshold, silence_duration, start_time=None, en
     return list(zip(chunk_starts, chunk_ends))
 
 
+def apply_metadata(filename, artist, title):
+    today = datetime.datetime.today()
+    today = today.strftime("%Y%m%d")
+    logger.info(f"Applying metadata to {filename}")
+    with taglib.File(filename, save_on_exit=True) as cut:
+        cut.tags["ARTIST"] = f"{artist} {today}"
+        cut.tags["TITLE"] = title
+        logger.info(cut.tags["ARTIST"])
+        logger.info(cut.tags["TITLE"])
+        logger.info(f"Cut length: {cut.length}")
+
+
 def split_audio(
         in_file,
         out_pattern,
+        artist,
+        title_pattern,
         silence_threshold,
         silence_duration,
         start_time=None,
@@ -81,9 +99,13 @@ def split_audio(
     ):
     chunk_times = get_chunks(in_file, silence_threshold, silence_duration, start_time, end_time)
 
+    cuts = []
+
     for i, (start_time, end_time) in enumerate(chunk_times):
         time = end_time - start_time
-        out_filename = out_pattern.format(i, i=i)
+        out_filename = out_pattern.format(i+1, i=i)
+        title = title_pattern.format(i+1, i=i)
+        cuts.append(out_filename)
 
         _logged_popen(
             (ffmpeg
@@ -95,3 +117,15 @@ def split_audio(
             stdout=subprocess.PIPE if not verbose else None,
             stderr=subprocess.PIPE if not verbose else None,
         ).communicate()
+
+        apply_metadata(out_filename, artist, title)
+
+    try:
+        logger.debug("Deleting original file")
+        os.remove(in_file)
+        logger.debug(f"{in_file} deleted")
+    except Exception as e:
+        logger.critical(f"Error deleting {in_file}")
+        logger.critical(e)
+
+    return cuts
