@@ -15,6 +15,11 @@ def new_ini(filename):
             'logdir': ''
         }
 
+        config['metadata'] = {
+                'artist': '',
+                'title_pattern': ''
+        }
+
         config['silence'] = {
             'duration': '',
             'threshold': '',
@@ -23,6 +28,7 @@ def new_ini(filename):
 
         config['email'] = {
             'mailhost': '',
+            'port': '587',
             'from_name': '',
             'recipients': '',
             'username': '',
